@@ -177,6 +177,8 @@
 
     <script>
         const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQLzuX1BgTlHxwgd7QnVuA2aPLR8EKXMg89E2OWfHHIQ5OBgZTylykPUZ-LvGGxjkj1x_xCZcy3jLG3/pub?gid=0&single=true&output=csv'; 
+        // Ny stabilare GeoJSON-källa för svenska kommuner
+        const GEOJSON_URL = 'https://raw.githubusercontent.com/fubira/swe-geojson/master/sweden-municipalities.json';
         
         let map, markersLayer, municipalityGeoJSON;
         let allData = [];
@@ -199,12 +201,13 @@
         }
 
         function findKommun(lat, lon) {
-            if (!municipalityGeoJSON) return "Söker...";
+            if (!municipalityGeoJSON) return "Matchar...";
             try {
                 const results = leafletPip.pointInLayer([lon, lat], municipalityGeoJSON);
                 if (results && results.length > 0) {
                     const props = results[0].feature.properties;
-                    return props.name || props.KOMMUNNAMN || props.municipality || "Oidentifierad";
+                    // Prova olika vanliga namn-nycklar i GeoJSON
+                    return props.name || props.KOMMUNNAMN || props.municipality || props.NAME_2 || "Oidentifierad";
                 }
             } catch(e) { return "Fel vid matchning"; }
             return "Utanför gräns";
@@ -217,13 +220,19 @@
                     header.onclick = () => header.parentElement.classList.toggle('active');
                 });
 
-                // Ladda GeoJSON
-                const geoRes = await fetch('https://raw.githubusercontent.com/fubira/swe-geojson/master/sweden-municipalities.json');
-                const geoData = await geoRes.json();
-                municipalityGeoJSON = L.geoJSON(geoData, {
-                    style: { color: '#3b82f6', weight: 0.5, fillOpacity: 0.01 },
-                    interactive: false
-                });
+                // Ladda GeoJSON först men fortsätt även om det misslyckas
+                try {
+                    const geoRes = await fetch(GEOJSON_URL);
+                    if (!geoRes.ok) throw new Error("GeoJSON 404");
+                    const geoData = await geoRes.json();
+                    municipalityGeoJSON = L.geoJSON(geoData, {
+                        style: { color: '#3b82f6', weight: 0.5, fillOpacity: 0.01 },
+                        interactive: false
+                    });
+                } catch (e) {
+                    console.error("Kunde inte ladda GeoJSON:", e);
+                    // Vi fortsätter ändå så butikerna visas
+                }
 
                 // Ladda CSV
                 Papa.parse(GOOGLE_SHEET_CSV_URL, {
@@ -236,8 +245,8 @@
                             const hasLat = row['Latitude'] && row['Latitude'] !== '';
                             return (closeDate === 'n/a' || closeDate === '') && hasLat;
                         }).map(row => {
-                            const lat = parseFloat(row['Latitude'].toString().replace(',', '.').trim());
-                            const lon = parseFloat(row['Longitude'].toString().replace(',', '.').trim());
+                            const lat = parseFloat(row['Latitude']?.toString().replace(',', '.').trim() || 0);
+                            const lon = parseFloat(row['Longitude']?.toString().replace(',', '.').trim() || 0);
                             const geoKommun = findKommun(lat, lon);
 
                             return {
@@ -254,6 +263,15 @@
                             };
                         });
                         
+                        // Om GeoJSON laddades sent, försök matcha igen
+                        if (municipalityGeoJSON) {
+                            allData.forEach(d => {
+                                if (d.Geo_Kommun === "Matchar...") {
+                                    d.Geo_Kommun = findKommun(d.Lat, d.Long);
+                                }
+                            });
+                        }
+
                         populateFilters();
                         updateView();
                         document.getElementById('loader').classList.add('hidden');
@@ -274,7 +292,10 @@
             const countBadge = document.querySelector(`#${sectionId} .filter-count`);
             container.innerHTML = '';
             
-            [...new Set(items)].sort().forEach(item => {
+            // Rensa bort "Matchar..." eller "Söker..." från filtervalen om de smugit sig in
+            const cleanItems = items.filter(i => i !== "Matchar..." && i !== "Söker...");
+            
+            [...new Set(cleanItems)].sort().forEach(item => {
                 const label = document.createElement('label');
                 label.className = 'flex items-center space-x-2 text-[10px] text-slate-600 cursor-pointer hover:bg-slate-50 p-1 rounded transition-colors';
                 label.innerHTML = `<input type="checkbox" value="${item}" class="filter-cb h-3 w-3 text-blue-600 rounded border-slate-300 focus:ring-blue-500"> <span class="truncate">${item}</span>`;
@@ -283,14 +304,12 @@
                     if(e.target.checked) setRef.add(e.target.value);
                     else setRef.delete(e.target.value);
                     
-                    // Uppdatera badge
                     if(setRef.size > 0) {
                         countBadge.innerText = setRef.size;
                         countBadge.classList.remove('hidden');
                     } else {
                         countBadge.classList.add('hidden');
                     }
-                    
                     updateView();
                 });
                 container.appendChild(label);
@@ -385,7 +404,7 @@
             ].join('\n');
 
             const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
+            const link = document.createEl ement("a");
             link.href = URL.createObjectURL(blob);
             link.download = `butiksdata_export_${new Date().toISOString().split('T')[0]}.csv`;
             link.click();
