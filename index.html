@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Butikskarta - Marknadsanalys</title>
+    
+    <!-- Tailwind CSS för ett modernt UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS & JS för kartan -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- PapaParse för att läsa ditt Google Sheet live -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <style>
+        #map { height: calc(100vh - 64px); width: 100%; z-index: 1; }
+        .sidebar { height: calc(100vh - 64px); overflow-y: auto; }
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: white; z-index: 9999;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .custom-popup .leaflet-popup-content-wrapper {
+            border-radius: 12px;
+            padding: 5px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-900 antialiased overflow-hidden">
+
+    <!-- Laddningsskärm -->
+    <div id="loader" class="loading-overlay">
+        <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent mb-4"></div>
+            <p class="text-lg font-medium text-slate-600 italic">Bygger din butikskarta...</p>
+        </div>
+    </div>
+
+    <!-- Navigationsfält -->
+    <nav class="bg-blue-900 text-white h-16 px-6 flex items-center justify-between shadow-lg relative z-[1001]">
+        <div class="flex items-center space-x-3">
+            <div class="bg-white p-1.5 rounded-lg text-blue-900">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-10V4a1 1 0 011-1h2a1 1 0 011 1v3M12 21v-3a1 1 0 00-1-1H9a1 1 0 00-1 1v3" />
+                </svg>
+            </div>
+            <h1 class="text-xl font-bold tracking-tight uppercase">Butikskarta <span class="text-blue-300 font-light">Pro</span></h1>
+        </div>
+        <div id="stats" class="hidden md:flex bg-blue-800 border border-blue-700 rounded-full px-4 py-1.5 text-sm font-medium shadow-inner">
+            Laddar data...
+        </div>
+    </nav>
+
+    <div class="flex flex-col md:flex-row h-screen">
+        <!-- Sidopanel för kontroller -->
+        <aside class="w-full md:w-80 bg-white border-r border-slate-200 sidebar z-[1000] shadow-sm">
+            <div class="p-5 space-y-8">
+                
+                <!-- Söksektion -->
+                <section>
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Sökning</h3>
+                    <div class="relative">
+                        <input type="text" id="searchInput" placeholder="Namn eller ort..." 
+                            class="w-full border border-slate-200 rounded-xl pl-4 pr-10 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute right-3 top-3 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                </section>
+
+                <!-- Kommunsegmentering -->
+                <section>
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Kommuner</h3>
+                        <span id="kommunCount" class="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded italic"></span>
+                    </div>
+                    <div id="kommunFilters" class="space-y-1.5 max-h-56 overflow-y-auto border border-slate-100 p-2 rounded-xl bg-slate-50/50 shadow-inner">
+                        <!-- Kommuner populeras dynamiskt -->
+                    </div>
+                </section>
+
+                <!-- Kategorier -->
+                <section>
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Segmentering</h3>
+                    <div id="categoryFilters" class="space-y-2">
+                        <!-- Kategorier populeras dynamiskt -->
+                    </div>
+                </section>
+
+                <!-- Återställ -->
+                <button id="resetFilters" class="w-full bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 py-3 rounded-xl transition-all duration-300 font-bold border border-transparent hover:border-red-100 flex items-center justify-center space-x-2 group">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transform group-hover:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>Återställ vy</span>
+                </button>
+            </div>
+            
+            <div class="p-5 mt-4 border-t border-slate-50">
+                <div class="bg-blue-50 rounded-lg p-4">
+                    <p class="text-[11px] text-blue-600 font-medium leading-relaxed">
+                        Denna vy är kopplad live till ditt Google Sheet. Varje ändring i kalkylarket reflekteras här vid nästa omladdning.
+                    </p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Kartområde -->
+        <main class="flex-1 relative">
+            <div id="map"></div>
+        </main>
+    </div>
+
+    <script>
+        // --- DATA KONFIGURATION ---
+        const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQLzuX1BgTlHxwgd7QnVuA2aPLR8EKXMg89E2OWfHHIQ5OBgZTylykPUZ-LvGGxjkj1x_xCZcy3jLG3/pub?gid=0&single=true&output=csv'; 
+        
+        let map, markersLayer, geojsonLayer;
+        let allData = [];
+        let activeFilters = {
+            search: '',
+            kommuner: new Set(),
+            categories: new Set()
+        };
+
+        // Initiera karta med ett snyggt färgschema
+        function initMap() {
+            map = L.map('map', { zoomControl: false }).setView([62.0, 15.0], 5);
+            
+            // Vi använder en mer sofistikerad kartstil (CartoDB Positron)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '© OpenStreetMap contributors © CARTO'
+            }).addTo(map);
+
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+            
+            markersLayer = L.layerGroup().addTo(map);
+        }
+
+        // Hämta och rita upp kommungränser
+        async function loadMunicipalities() {
+            try {
+                const response = await fetch('https://raw.githubusercontent.com/fubira/swe-geojson/master/sweden-municipalities.json');
+                const data = await response.json();
+                
+                geojsonLayer = L.geoJSON(data, {
+                    style: {
+                        color: '#94a3b8', // Slate-400
+                        weight: 0.5,
+                        fillOpacity: 0.01,
+                        fillColor: '#3b82f6'
+                    },
+                    onEachFeature: (feature, layer) => {
+                        layer.on('mouseover', () => {
+                            layer.setStyle({ fillOpacity: 0.08, weight: 1, color: '#3b82f6' });
+                        });
+                        layer.on('mouseout', () => {
+                            layer.setStyle({ fillOpacity: 0.01, weight: 0.5, color: '#94a3b8' });
+                        });
+                        layer.bindTooltip(`<strong>Kommun:</strong> ${feature.properties.name}`, { sticky: true });
+                    }
+                }).addTo(map);
+            } catch (err) {
+                console.warn("Kommungränser kunde inte laddas:", err);
+            }
+        }
+
+        // Parsing av Google Sheets data
+        function loadSheetData() {
+            Papa.parse(GOOGLE_SHEET_CSV_URL, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    // Mappar kolumnerna: Butik, Adress, Kommun, Lat, Long, Kategori
+                    allData = results.data.filter(row => row.Lat && row.Long);
+                    
+                    // Normalisera koordinater
+                    allData.forEach(d => {
+                        d.Lat = d.Lat.toString().replace(',', '.');
+                        d.Long = d.Long.toString().replace(',', '.');
+                    });
+
+                    populateFilters();
+                    renderMarkers();
+                    document.getElementById('loader').classList.add('hidden');
+                },
+                error: function(err) {
+                    console.error("CSV-fel:", err);
+                    alert("Kunde inte hämta data. Se till att ditt Google Sheet är 'Publicerat på webben' som CSV.");
+                }
+            });
+        }
+
+        function populateFilters() {
+            const kommuner = [...new Set(allData.map(d => d.Kommun).filter(Boolean))].sort();
+            const kategorier = [...new Set(allData.map(d => d.Kategori).filter(Boolean))].sort();
+
+            document.getElementById('kommunCount').innerText = `${kommuner.length} st`;
+
+            const kDiv = document.getElementById('kommunFilters');
+            kommuner.forEach(k => {
+                const label = document.createElement('label');
+                label.className = 'flex items-center space-x-2.5 text-xs text-slate-600 cursor-pointer hover:bg-white p-1.5 rounded-lg transition-colors';
+                label.innerHTML = `<input type="checkbox" value="${k}" class="kommun-cb h-4 w-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"> <span>${k}</span>`;
+                kDiv.appendChild(label);
+            });
+
+            const catDiv = document.getElementById('categoryFilters');
+            kategorier.forEach(c => {
+                const label = document.createElement('label');
+                label.className = 'flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 cursor-pointer transition-all';
+                label.innerHTML = `
+                    <span class="text-sm font-medium text-slate-700">${c}</span>
+                    <input type="checkbox" value="${c}" class="cat-cb h-5 w-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                `;
+                catDiv.appendChild(label);
+            });
+
+            // Listeners
+            document.querySelectorAll('.kommun-cb').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    if(e.target.checked) activeFilters.kommuner.add(e.target.value);
+                    else activeFilters.kommuner.delete(e.target.value);
+                    renderMarkers();
+                });
+            });
+
+            document.querySelectorAll('.cat-cb').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    if(e.target.checked) activeFilters.categories.add(e.target.value);
+                    else activeFilters.categories.delete(e.target.value);
+                    renderMarkers();
+                });
+            });
+
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                activeFilters.search = e.target.value.toLowerCase();
+                renderMarkers();
+            });
+
+            document.getElementById('resetFilters').addEventListener('click', () => {
+                document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                document.getElementById('searchInput').value = '';
+                activeFilters.kommuner.clear();
+                activeFilters.categories.clear();
+                activeFilters.search = '';
+                renderMarkers();
+                map.setView([62.0, 15.0], 5);
+            });
+        }
+
+        function renderMarkers() {
+            markersLayer.clearLayers();
+            
+            const filtered = allData.filter(d => {
+                const matchesSearch = !activeFilters.search || 
+                    d.Butik.toLowerCase().includes(activeFilters.search) || 
+                    d.Adress?.toLowerCase().includes(activeFilters.search);
+                
+                const matchesKommun = activeFilters.kommuner.size === 0 || 
+                    activeFilters.kommuner.has(d.Kommun);
+                
+                const matchesCat = activeFilters.categories.size === 0 || 
+                    activeFilters.categories.has(d.Kategori);
+
+                return matchesSearch && matchesKommun && matchesCat;
+            });
+
+            filtered.forEach(d => {
+                const lat = parseFloat(d.Lat);
+                const lng = parseFloat(d.Long);
+                
+                if(!isNaN(lat) && !isNaN(lng)) {
+                    // Skapa en marker med ring-effekt
+                    const marker = L.circleMarker([lat, lng], {
+                        radius: 8,
+                        fillColor: "#2563eb", // Blue-600
+                        color: "#fff",
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.9
+                    });
+
+                    const popup = `
+                        <div class="p-2 w-48 font-sans">
+                            <div class="text-[10px] font-bold text-blue-600 uppercase mb-1 tracking-tighter">${d.Kategori || 'Butik'}</div>
+                            <h3 class="font-bold text-slate-800 text-sm mb-1">${d.Butik}</h3>
+                            <p class="text-xs text-slate-500">${d.Adress}</p>
+                            <div class="mt-3 pt-2 border-t border-slate-100 flex items-center text-[10px] text-slate-400">
+                                <svg class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                </svg>
+                                ${d.Kommun}
+                            </div>
+                        </div>
+                    `;
+
+                    marker.bindPopup(popup, { className: 'custom-popup' });
+                    markersLayer.addLayer(marker);
+                }
+            });
+
+            document.getElementById('stats').innerHTML = `
+                <span class="text-blue-300 mr-2 opacity-50">•</span> 
+                ${filtered.length} butiker hittades
+            `;
+            
+            // Zooma in om vi har aktiva filter
+            if(filtered.length > 0 && (activeFilters.kommuner.size > 0 || activeFilters.search.length > 2)) {
+                const group = new L.featureGroup(markersLayer.getLayers());
+                map.fitBounds(group.getBounds(), { padding: [100, 100], maxZoom: 11 });
+            }
+        }
+
+        window.onload = () => {
+            initMap();
+            loadMunicipalities();
+            loadSheetData();
+        };
+    </script>
+</body>
+</html>
