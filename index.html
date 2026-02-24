@@ -39,9 +39,9 @@
 
     <!-- Laddningsskärm -->
     <div id="loader" class="loading-overlay">
-        <div class="text-center">
-            <div class="inline-block animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent mb-4"></div>
-            <p class="text-lg font-medium text-slate-600 italic">Bygger din butikskarta...</p>
+        <div class="text-center p-6">
+            <div id="loader-spinner" class="inline-block animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent mb-4"></div>
+            <p id="loader-text" class="text-lg font-medium text-slate-600 italic">Ansluter till datakälla...</p>
         </div>
     </div>
 
@@ -56,7 +56,7 @@
             <h1 class="text-xl font-bold tracking-tight uppercase italic">Butikskarta <span class="text-blue-300 font-light not-italic">Pro</span></h1>
         </div>
         <div id="stats" class="hidden md:flex bg-blue-800 border border-blue-700 rounded-full px-4 py-1.5 text-sm font-medium shadow-inner">
-            Ansluter till Google Sheets...
+            Verifierar Google Sheets...
         </div>
     </nav>
 
@@ -108,7 +108,7 @@
             <div class="p-5 mt-4 border-t border-slate-50">
                 <div class="bg-blue-50 rounded-lg p-4">
                     <p class="text-[11px] text-blue-600 font-medium leading-relaxed">
-                        Data hämtas live från Google Sheets. Ändringar i arkivet visas här vid nästa omladdning.
+                        Data hämtas live från Google Sheets. Kontrollera att ditt kalkylark är "Publicerat på webben" som CSV.
                     </p>
                 </div>
             </div>
@@ -176,18 +176,30 @@
 
         // Parsing av Google Sheets data
         function loadSheetData() {
+            console.log("Försöker hämta data från:", GOOGLE_SHEET_CSV_URL);
+            
             Papa.parse(GOOGLE_SHEET_CSV_URL, {
                 download: true,
                 header: true,
                 skipEmptyLines: true,
                 complete: function(results) {
+                    console.log("Rådata från Sheet:", results.data);
+                    
+                    // Validera att vi faktiskt fick rader
+                    if (results.data.length === 0) {
+                        showError("Ingen data hittades i dokumentet. Kontrollera att det inte är tomt.");
+                        return;
+                    }
+
                     // Filtrera rader som saknar koordinater
                     allData = results.data.filter(row => row.Lat && row.Long);
                     
-                    // Normalisera koordinater (byt ut komma mot punkt)
+                    console.log(`Hittade ${allData.length} butiker med giltiga koordinater.`);
+
+                    // Normalisera koordinater
                     allData.forEach(d => {
-                        d.Lat = d.Lat.toString().replace(',', '.');
-                        d.Long = d.Long.toString().replace(',', '.');
+                        d.Lat = d.Lat.toString().replace(',', '.').trim();
+                        d.Long = d.Long.toString().replace(',', '.').trim();
                     });
 
                     populateFilters();
@@ -199,11 +211,19 @@
                     }, 500);
                 },
                 error: function(err) {
-                    console.error("Fel vid inläsning av Sheet:", err);
-                    document.getElementById('stats').innerText = "Fel vid anslutning";
-                    document.getElementById('loader').innerHTML = "<p class='text-red-500 px-4 text-center'>Kunde inte hämta data. Kontrollera att ditt Sheet är publicerat som CSV på webben.</p>";
+                    console.error("Fel vid PapaParse:", err);
+                    showError("Kunde inte ansluta till Google Sheets. Kontrollera att länken är rätt och att dokumentet är publicerat.");
                 }
             });
+        }
+
+        function showError(msg) {
+            document.getElementById('loader-spinner').classList.add('hidden');
+            const loaderText = document.getElementById('loader-text');
+            loaderText.innerText = msg;
+            loaderText.classList.remove('text-slate-600');
+            loaderText.classList.add('text-red-500', 'font-bold');
+            document.getElementById('stats').innerText = "Anslutningsfel";
         }
 
         function populateFilters() {
@@ -213,7 +233,7 @@
             document.getElementById('kommunCount').innerText = `${kommuner.length} st`;
 
             const kDiv = document.getElementById('kommunFilters');
-            kDiv.innerHTML = ''; // Rensa
+            kDiv.innerHTML = ''; 
             kommuner.forEach(k => {
                 const label = document.createElement('label');
                 label.className = 'flex items-center space-x-2.5 text-xs text-slate-600 cursor-pointer hover:bg-white p-1.5 rounded-lg transition-colors';
@@ -222,7 +242,7 @@
             });
 
             const catDiv = document.getElementById('categoryFilters');
-            catDiv.innerHTML = ''; // Rensa
+            catDiv.innerHTML = ''; 
             kategorier.forEach(c => {
                 const label = document.createElement('label');
                 label.className = 'flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 cursor-pointer transition-all';
@@ -233,7 +253,7 @@
                 catDiv.appendChild(label);
             });
 
-            // Event Listeners för filter
+            // Event Listeners
             document.querySelectorAll('.kommun-cb').forEach(cb => {
                 cb.addEventListener('change', (e) => {
                     if(e.target.checked) activeFilters.kommuner.add(e.target.value);
@@ -320,14 +340,12 @@
                 ${filtered.length} butiker hittades
             `;
             
-            // Anpassa vyn om vi har aktiva filter
             if(filtered.length > 0 && (activeFilters.kommuner.size > 0 || activeFilters.search.length > 2)) {
                 const group = new L.featureGroup(markersLayer.getLayers());
                 map.fitBounds(group.getBounds(), { padding: [100, 100], maxZoom: 11 });
             }
         }
 
-        // Startsekvens
         window.addEventListener('load', () => {
             initMap();
             loadMunicipalities();
