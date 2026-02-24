@@ -6,7 +6,7 @@
     <title>Butikskarta - Marknadsanalys</title>
     
     <!-- Tailwind CSS för ett modernt UI -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com/3.4.1"></script>
     
     <!-- Leaflet CSS & JS för kartan -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -28,6 +28,11 @@
             padding: 5px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
+        /* Fix för att säkerställa att scrollbars ser snygga ut */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-slate-900 antialiased overflow-hidden">
@@ -48,10 +53,10 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-10V4a1 1 0 011-1h2a1 1 0 011 1v3M12 21v-3a1 1 0 00-1-1H9a1 1 0 00-1 1v3" />
                 </svg>
             </div>
-            <h1 class="text-xl font-bold tracking-tight uppercase">Butikskarta <span class="text-blue-300 font-light">Pro</span></h1>
+            <h1 class="text-xl font-bold tracking-tight uppercase italic">Butikskarta <span class="text-blue-300 font-light not-italic">Pro</span></h1>
         </div>
         <div id="stats" class="hidden md:flex bg-blue-800 border border-blue-700 rounded-full px-4 py-1.5 text-sm font-medium shadow-inner">
-            Laddar data...
+            Ansluter till Google Sheets...
         </div>
     </nav>
 
@@ -103,7 +108,7 @@
             <div class="p-5 mt-4 border-t border-slate-50">
                 <div class="bg-blue-50 rounded-lg p-4">
                     <p class="text-[11px] text-blue-600 font-medium leading-relaxed">
-                        Denna vy är kopplad live till ditt Google Sheet. Varje ändring i kalkylarket reflekteras här vid nästa omladdning.
+                        Data hämtas live från Google Sheets. Ändringar i arkivet visas här vid nästa omladdning.
                     </p>
                 </div>
             </div>
@@ -127,11 +132,10 @@
             categories: new Set()
         };
 
-        // Initiera karta med ett snyggt färgschema
+        // Initiera karta
         function initMap() {
             map = L.map('map', { zoomControl: false }).setView([62.0, 15.0], 5);
             
-            // Vi använder en mer sofistikerad kartstil (CartoDB Positron)
             L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
                 attribution: '© OpenStreetMap contributors © CARTO'
             }).addTo(map);
@@ -145,11 +149,12 @@
         async function loadMunicipalities() {
             try {
                 const response = await fetch('https://raw.githubusercontent.com/fubira/swe-geojson/master/sweden-municipalities.json');
+                if (!response.ok) throw new Error('Kunde inte hämta GeoJSON');
                 const data = await response.json();
                 
                 geojsonLayer = L.geoJSON(data, {
                     style: {
-                        color: '#94a3b8', // Slate-400
+                        color: '#94a3b8',
                         weight: 0.5,
                         fillOpacity: 0.01,
                         fillColor: '#3b82f6'
@@ -176,10 +181,10 @@
                 header: true,
                 skipEmptyLines: true,
                 complete: function(results) {
-                    // Mappar kolumnerna: Butik, Adress, Kommun, Lat, Long, Kategori
+                    // Filtrera rader som saknar koordinater
                     allData = results.data.filter(row => row.Lat && row.Long);
                     
-                    // Normalisera koordinater
+                    // Normalisera koordinater (byt ut komma mot punkt)
                     allData.forEach(d => {
                         d.Lat = d.Lat.toString().replace(',', '.');
                         d.Long = d.Long.toString().replace(',', '.');
@@ -187,11 +192,16 @@
 
                     populateFilters();
                     renderMarkers();
-                    document.getElementById('loader').classList.add('hidden');
+                    
+                    // Dölj loader när data är klar
+                    setTimeout(() => {
+                        document.getElementById('loader').classList.add('hidden');
+                    }, 500);
                 },
                 error: function(err) {
-                    console.error("CSV-fel:", err);
-                    alert("Kunde inte hämta data. Se till att ditt Google Sheet är 'Publicerat på webben' som CSV.");
+                    console.error("Fel vid inläsning av Sheet:", err);
+                    document.getElementById('stats').innerText = "Fel vid anslutning";
+                    document.getElementById('loader').innerHTML = "<p class='text-red-500 px-4 text-center'>Kunde inte hämta data. Kontrollera att ditt Sheet är publicerat som CSV på webben.</p>";
                 }
             });
         }
@@ -203,6 +213,7 @@
             document.getElementById('kommunCount').innerText = `${kommuner.length} st`;
 
             const kDiv = document.getElementById('kommunFilters');
+            kDiv.innerHTML = ''; // Rensa
             kommuner.forEach(k => {
                 const label = document.createElement('label');
                 label.className = 'flex items-center space-x-2.5 text-xs text-slate-600 cursor-pointer hover:bg-white p-1.5 rounded-lg transition-colors';
@@ -211,6 +222,7 @@
             });
 
             const catDiv = document.getElementById('categoryFilters');
+            catDiv.innerHTML = ''; // Rensa
             kategorier.forEach(c => {
                 const label = document.createElement('label');
                 label.className = 'flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 cursor-pointer transition-all';
@@ -221,7 +233,7 @@
                 catDiv.appendChild(label);
             });
 
-            // Listeners
+            // Event Listeners för filter
             document.querySelectorAll('.kommun-cb').forEach(cb => {
                 cb.addEventListener('change', (e) => {
                     if(e.target.checked) activeFilters.kommuner.add(e.target.value);
@@ -258,9 +270,8 @@
             markersLayer.clearLayers();
             
             const filtered = allData.filter(d => {
-                const matchesSearch = !activeFilters.search || 
-                    d.Butik.toLowerCase().includes(activeFilters.search) || 
-                    d.Adress?.toLowerCase().includes(activeFilters.search);
+                const searchStr = (d.Butik + " " + d.Adress + " " + (d.Ort || "")).toLowerCase();
+                const matchesSearch = !activeFilters.search || searchStr.includes(activeFilters.search);
                 
                 const matchesKommun = activeFilters.kommuner.size === 0 || 
                     activeFilters.kommuner.has(d.Kommun);
@@ -276,10 +287,9 @@
                 const lng = parseFloat(d.Long);
                 
                 if(!isNaN(lat) && !isNaN(lng)) {
-                    // Skapa en marker med ring-effekt
                     const marker = L.circleMarker([lat, lng], {
                         radius: 8,
-                        fillColor: "#2563eb", // Blue-600
+                        fillColor: "#2563eb",
                         color: "#fff",
                         weight: 2,
                         opacity: 1,
@@ -310,18 +320,19 @@
                 ${filtered.length} butiker hittades
             `;
             
-            // Zooma in om vi har aktiva filter
+            // Anpassa vyn om vi har aktiva filter
             if(filtered.length > 0 && (activeFilters.kommuner.size > 0 || activeFilters.search.length > 2)) {
                 const group = new L.featureGroup(markersLayer.getLayers());
                 map.fitBounds(group.getBounds(), { padding: [100, 100], maxZoom: 11 });
             }
         }
 
-        window.onload = () => {
+        // Startsekvens
+        window.addEventListener('load', () => {
             initMap();
             loadMunicipalities();
             loadSheetData();
-        };
+        });
     </script>
 </body>
 </html>
