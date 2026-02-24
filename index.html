@@ -167,9 +167,8 @@
                 preferCanvas: true 
             }).setView([62.0, 15.0], 5);
             
-            // Bytt till Stadia Maps Alidade Smooth för tydligare gränser och renare look
-            L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '© OpenStreetMap'
             }).addTo(map);
             
             L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -182,7 +181,10 @@
                 header: true,
                 skipEmptyLines: true,
                 complete: function(results) {
+                    console.log("Rådata laddad, rader:", results.data.length);
+                    
                     allData = results.data.filter(row => {
+                        // Kontrollera att Lat/Lng finns och är giltiga nummer
                         const latRaw = (row['Latitude'] || '').replace(',', '.').trim();
                         const lngRaw = (row['Longitude'] || '').replace(',', '.').trim();
                         const lat = parseFloat(latRaw);
@@ -203,13 +205,14 @@
                         raw: row
                     }));
 
+                    console.log("Validerad data, rader:", allData.length);
                     setupFilters();
                     updateUI();
                     document.getElementById('loader').classList.add('hidden');
                 },
                 error: function(err) {
                     console.error("Fel vid laddning av CSV:", err);
-                    alert("Kunde inte hämta data.");
+                    alert("Kunde inte hämta data från Google Sheets. Kontrollera nätverket.");
                 }
             });
         }
@@ -285,6 +288,7 @@
             markersLayer.clearLayers();
             
             filteredData.forEach(d => {
+                // Sista säkerhetskoll innan vi ritar
                 if (isNaN(d.lat) || isNaN(d.lng)) return;
 
                 const marker = L.circleMarker([d.lat, d.lng], {
@@ -310,13 +314,14 @@
                 markersLayer.addLayer(marker);
             });
 
+            // Auto-zoom om vi har filtrerat fram något specifikt
             if (filteredData.length > 0 && filteredData.length < allData.length) {
                 try {
                     const group = new L.featureGroup(markersLayer.getLayers());
                     if (group.getLayers().length > 0) {
                         map.fitBounds(group.getBounds(), { padding: [50, 50], maxZoom: 13 });
                     }
-                } catch(e) { console.error(e); }
+                } catch(e) { console.error("Kunde inte zooma till markers", e); }
             }
         }
 
@@ -324,6 +329,7 @@
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
             
+            // Visa bara de första 100 i tabellen för prestanda om listan är enorm
             const displayLimit = 200;
             const toDisplay = filteredData.slice(0, displayLimit);
 
@@ -345,6 +351,7 @@
                 tr.onclick = () => {
                     if (!isNaN(d.lat) && !isNaN(d.lng)) {
                         map.setView([d.lat, d.lng], 15);
+                        // Hitta rätt marker och öppna dess popup
                         markersLayer.eachLayer(m => {
                             if (m.getLatLng().lat === d.lat && m.getLatLng().lng === d.lng) {
                                 m.openPopup();
