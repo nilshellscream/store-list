@@ -3,149 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Butikskarta - Marknadsanalys</title>
+    <title>Butikskarta - Geo-analys</title>
     
-    <!-- Tailwind CSS för ett modernt UI -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com/3.4.1"></script>
     
-    <!-- Leaflet CSS & JS för kartan -->
+    <!-- Leaflet CSS & JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- PapaParse för att läsa ditt Google Sheet live -->
+    <!-- Punkt-i-polygon bibliotek för att matcha koordinater mot kommuner -->
+    <script src="https://unpkg.com/@mapbox/leaflet-pip@1.1.0/leaflet-pip.js"></script>
+    
+    <!-- PapaParse för CSV -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <style>
-        #map { height: 60vh; width: 100%; z-index: 1; }
+        #map { height: 55vh; width: 100%; z-index: 1; }
         .sidebar { height: calc(100vh - 64px); overflow-y: auto; }
         .loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: white; z-index: 9999;
             display: flex; justify-content: center; align-items: center;
         }
-        .custom-popup .leaflet-popup-content-wrapper {
-            border-radius: 12px;
-            padding: 5px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-        .table-container { height: 35vh; overflow: auto; }
-        /* Fix för att säkerställa att scrollbars ser snygga ut */
+        .custom-popup .leaflet-popup-content-wrapper { border-radius: 12px; padding: 5px; }
+        .table-container { height: 40vh; overflow: auto; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-slate-900 antialiased overflow-hidden">
 
-    <!-- Laddningsskärm -->
     <div id="loader" class="loading-overlay">
         <div class="text-center p-6">
             <div id="loader-spinner" class="inline-block animate-spin rounded-full h-16 w-16 border-4 border-blue-600 border-t-transparent mb-4"></div>
-            <p id="loader-text" class="text-lg font-medium text-slate-600 italic">Ansluter till Ledger-data...</p>
+            <p id="loader-text" class="text-lg font-medium text-slate-600 italic">Matchar koordinater mot Sveriges kommuner...</p>
         </div>
     </div>
 
-    <!-- Navigationsfält -->
     <nav class="bg-blue-900 text-white h-16 px-6 flex items-center justify-between shadow-lg relative z-[1001]">
         <div class="flex items-center space-x-3">
             <div class="bg-white p-1.5 rounded-lg text-blue-900">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-10V4a1 1 0 011-1h2a1 1 0 011 1v3M12 21v-3a1 1 0 00-1-1H9a1 1 0 00-1 1v3" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 </svg>
             </div>
-            <h1 class="text-xl font-bold tracking-tight uppercase italic">Butikskarta <span class="text-blue-300 font-light not-italic">Pro</span></h1>
+            <h1 class="text-xl font-bold tracking-tight uppercase italic">Butikskarta <span class="text-blue-300 font-light not-italic">Geo-Match</span></h1>
         </div>
         <div class="flex items-center space-x-4">
-            <div id="stats" class="hidden md:flex bg-blue-800 border border-blue-700 rounded-full px-4 py-1.5 text-sm font-medium shadow-inner">
-                Hämtar data...
+            <div id="stats" class="hidden md:flex bg-blue-800 border border-blue-700 rounded-full px-4 py-1.5 text-sm font-medium shadow-inner italic">
+                Laddar...
             </div>
             <button id="downloadCsv" class="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-full text-sm font-bold flex items-center space-x-2 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                <span>Exportera urval</span>
+                <span>Exportera CSV</span>
             </button>
         </div>
     </nav>
 
     <div class="flex flex-col md:flex-row h-screen">
-        <!-- Sidopanel för kontroller -->
         <aside class="w-full md:w-80 bg-white border-r border-slate-200 sidebar z-[1000] shadow-sm">
             <div class="p-5 space-y-6">
                 
-                <!-- Söksektion -->
                 <section>
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Sökning</h3>
-                    <input type="text" id="searchInput" placeholder="Namn, stad eller adress..." 
-                        class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all shadow-sm">
+                    <input type="text" id="searchInput" placeholder="Butiksnamn eller adress..." 
+                        class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500">
                 </section>
 
-                <!-- City / Stad -->
+                <!-- Kommun (Geografiskt beräknad) -->
                 <section>
-                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Stad</h3>
-                    <div id="cityFilters" class="space-y-1 max-h-40 overflow-y-auto border border-slate-100 p-2 rounded-xl bg-slate-50/50">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Kommun (Beräknad)</h3>
+                    <div id="kommunFilters" class="space-y-1 max-h-32 overflow-y-auto border border-slate-100 p-2 rounded-xl bg-slate-50/50">
                         <!-- Populeras dynamiskt -->
                     </div>
                 </section>
 
-                <!-- Owner / Förening -->
+                <!-- Stad (Från City-kolumnen) -->
+                <section>
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Stad (Kalkylark)</h3>
+                    <div id="cityFilters" class="space-y-1 max-h-32 overflow-y-auto border border-slate-100 p-2 rounded-xl bg-slate-50/50">
+                        <!-- Populeras dynamiskt -->
+                    </div>
+                </section>
+
                 <section>
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Ägare / Förening</h3>
-                    <div id="ownerFilters" class="space-y-1 max-h-40 overflow-y-auto border border-slate-100 p-2 rounded-xl bg-slate-50/50">
+                    <div id="ownerFilters" class="space-y-1 max-h-32 overflow-y-auto border border-slate-100 p-2 rounded-xl bg-slate-50/50">
                         <!-- Populeras dynamiskt -->
                     </div>
                 </section>
 
-                <!-- Concept -->
                 <section>
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Koncept</h3>
-                    <div id="conceptFilters" class="space-y-1 max-h-40 overflow-y-auto border border-slate-100 p-2 rounded-xl bg-slate-50/50">
+                    <div id="conceptFilters" class="space-y-1 max-h-32 overflow-y-auto border border-slate-100 p-2 rounded-xl bg-slate-50/50">
                         <!-- Populeras dynamiskt -->
                     </div>
                 </section>
 
-                <!-- Concept Description -->
-                <section>
-                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Beskrivning</h3>
-                    <div id="descFilters" class="space-y-1 max-h-40 overflow-y-auto border border-slate-100 p-2 rounded-xl bg-slate-50/50">
-                        <!-- Populeras dynamiskt -->
-                    </div>
-                </section>
-
-                <!-- Återställ -->
-                <button id="resetFilters" class="w-full bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 py-3 rounded-xl transition-all duration-300 font-bold border border-transparent hover:border-red-100 flex items-center justify-center space-x-2">
-                    <span>Återställ alla filter</span>
+                <button id="resetFilters" class="w-full bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 py-3 rounded-xl transition-all font-bold border border-transparent hover:border-red-100">
+                    Återställ vy
                 </button>
             </div>
         </aside>
 
-        <!-- Huvudinnehåll -->
         <main class="flex-1 flex flex-col min-w-0">
-            <!-- Kartan -->
             <div id="map"></div>
             
-            <!-- Tabellen -->
             <div class="flex-1 bg-white border-t border-slate-200 flex flex-col min-h-0">
-                <div class="px-6 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <h2 class="text-sm font-bold text-slate-500 uppercase tracking-tight">Butikslista (Urval)</h2>
-                    <span id="rowCountDisplay" class="text-xs font-medium text-slate-400 italic"></span>
+                <div class="px-6 py-2 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h2 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Aktivt Urval</h2>
+                    <span id="rowCountDisplay" class="text-[10px] font-medium text-slate-400 uppercase"></span>
                 </div>
                 <div class="table-container flex-1">
-                    <table id="dataTable" class="w-full text-left border-collapse text-xs">
+                    <table id="dataTable" class="w-full text-left border-collapse text-[11px]">
                         <thead class="sticky top-0 bg-white shadow-sm z-10">
-                            <tr class="text-slate-400 border-b border-slate-100">
-                                <th class="px-4 py-3 font-bold uppercase">Butik</th>
-                                <th class="px-4 py-3 font-bold uppercase">Stad</th>
-                                <th class="px-4 py-3 font-bold uppercase">Ägare</th>
-                                <th class="px-4 py-3 font-bold uppercase">Koncept</th>
-                                <th class="px-4 py-3 font-bold uppercase">Adress</th>
-                                <th class="px-4 py-3 font-bold uppercase">Öppningsdatum</th>
+                            <tr class="text-slate-400 border-b border-slate-100 uppercase">
+                                <th class="px-4 py-3">Butik</th>
+                                <th class="px-4 py-3 text-blue-600">Geo-Kommun</th>
+                                <th class="px-4 py-3">Stad</th>
+                                <th class="px-4 py-3">Ägare</th>
+                                <th class="px-4 py-3">Koncept</th>
+                                <th class="px-4 py-3">Adress</th>
+                                <th class="px-4 py-3 text-right">Öppnat</th>
                             </tr>
                         </thead>
-                        <tbody id="tableBody" class="divide-y divide-slate-50">
-                            <!-- Rader populeras dynamiskt -->
-                        </tbody>
+                        <tbody id="tableBody" class="divide-y divide-slate-50"></tbody>
                     </table>
                 </div>
             </div>
@@ -153,124 +139,103 @@
     </div>
 
     <script>
-        // --- DATA KONFIGURATION ---
         const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQLzuX1BgTlHxwgd7QnVuA2aPLR8EKXMg89E2OWfHHIQ5OBgZTylykPUZ-LvGGxjkj1x_xCZcy3jLG3/pub?gid=0&single=true&output=csv'; 
         
-        let map, markersLayer;
+        let map, markersLayer, municipalityGeoJSON;
         let allData = [];
         let filteredData = [];
         let activeFilters = {
             search: '',
+            kommuner: new Set(),
             cities: new Set(),
             owners: new Set(),
-            concepts: new Set(),
-            descriptions: new Set()
+            concepts: new Set()
         };
 
-        // Initiera karta
         function initMap() {
             map = L.map('map', { zoomControl: false }).setView([59.3, 18.0], 6);
-            
             L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
                 attribution: '© OpenStreetMap contributors © CARTO'
             }).addTo(map);
-
             L.control.zoom({ position: 'bottomright' }).addTo(map);
             markersLayer = L.layerGroup().addTo(map);
         }
 
-        // Hämta kommungränser
-        async function loadMunicipalities() {
+        function findKommun(lat, lon) {
+            if (!municipalityGeoJSON) return "Okänd";
+            const results = leafletPip.pointInLayer([lon, lat], municipalityGeoJSON);
+            if (results.length > 0) {
+                return results[0].feature.properties.name || results[0].feature.properties.KOMMUNNAMN || "Oidentifierad";
+            }
+            return "Utanför gräns";
+        }
+
+        async function loadAssetsAndData() {
             try {
-                // Använder en alternativ GeoJSON-fil för Sverige
-                const response = await fetch('https://raw.githubusercontent.com/fubira/swe-geojson/master/sweden-counties.json');
-                if (response.ok) {
-                    const data = await response.json();
-                    L.geoJSON(data, {
-                        style: { color: '#94a3b8', weight: 1, fillOpacity: 0.02, fillColor: '#3b82f6' },
-                        interactive: false
-                    }).addTo(map);
-                }
-            } catch (err) { console.warn("GeoJSON laddningsfel:", err); }
-        }
+                const geoRes = await fetch('https://raw.githubusercontent.com/fubira/swe-geojson/master/sweden-municipalities.json');
+                const geoData = await geoRes.json();
+                municipalityGeoJSON = L.geoJSON(geoData, {
+                    style: { color: '#3b82f6', weight: 0.5, fillOpacity: 0.01 },
+                    interactive: false
+                }).addTo(map);
 
-        // Läs in data från Google Sheets
-        function loadSheetData() {
-            Papa.parse(GOOGLE_SHEET_CSV_URL, {
-                download: true,
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    if (results.data.length === 0) {
-                        showError("Ingen data hittades.");
-                        return;
-                    }
+                Papa.parse(GOOGLE_SHEET_CSV_URL, {
+                    download: true,
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        allData = results.data.filter(row => {
+                            const closeDate = (row['Close Date'] || '').toLowerCase().trim();
+                            const hasLat = row['Latitude'] && row['Latitude'] !== '';
+                            return (closeDate === 'n/a' || closeDate === '') && hasLat;
+                        }).map(row => {
+                            const lat = parseFloat(row['Latitude'].toString().replace(',', '.').trim());
+                            const lon = parseFloat(row['Longitude'].toString().replace(',', '.').trim());
+                            const geoKommun = findKommun(lat, lon);
 
-                    // Bearbeta data enligt dina kolumner
-                    allData = results.data.filter(row => {
-                        // ENDAST AKTIVA BUTIKER (Close Date ska vara "n/a" eller tom)
-                        const closeDate = (row['Close Date'] || '').toLowerCase().trim();
-                        const isLatitudeValid = row['Latitude'] && row['Latitude'] !== '';
-                        return (closeDate === 'n/a' || closeDate === '') && isLatitudeValid;
-                    }).map(row => ({
-                        Display_Name: row['Display Name'] || row['Store ID'] || 'Namnlös',
-                        City: row['City'] || 'Okänd stad',
-                        Owner: row['Owner'] || 'Okänd ägare',
-                        Concept: row['Concept'] || 'Övrigt',
-                        Concept_Description: row['Concept Description'] || 'N/A',
-                        Address: row['Address'] || '',
-                        Open_Date: row['Open Date'] || '',
-                        Lat: parseFloat(row['Latitude'].toString().replace(',', '.').trim()),
-                        Long: parseFloat(row['Longitude'].toString().replace(',', '.').trim()),
-                        Raw: row // Behåller hela raden för export
-                    }));
-                    
-                    console.log(`Laddat ${allData.length} aktiva butiker.`);
-
-                    populateFilters();
-                    updateView();
-                    
-                    setTimeout(() => {
+                            return {
+                                Display_Name: row['Display Name'] || row['Store ID'] || 'Namnlös',
+                                Geo_Kommun: geoKommun,
+                                City: row['City'] || 'N/A',
+                                Owner: row['Owner'] || 'N/A',
+                                Concept: row['Concept'] || 'Övrigt',
+                                Address: row['Address'] || '',
+                                Open_Date: row['Open Date'] || '',
+                                Lat: lat,
+                                Long: lon,
+                                Raw: row
+                            };
+                        });
+                        
+                        populateFilters();
+                        updateView();
                         document.getElementById('loader').classList.add('hidden');
-                    }, 500);
-                },
-                error: function(err) { showError("Kunde inte ansluta till kalkylark."); }
-            });
+                    }
+                });
+            } catch (err) { console.error("Fel vid laddning:", err); }
         }
 
-        function showError(msg) {
-            document.getElementById('loader-spinner').classList.add('hidden');
-            const loaderText = document.getElementById('loader-text');
-            loaderText.innerText = msg;
-            loaderText.classList.add('text-red-500', 'font-bold');
-        }
-
-        // Skapa filterval dynamiskt
-        function createFilterGroup(containerId, dataArray, filterKey, setRef) {
+        function createFilterGroup(containerId, items, setRef) {
             const container = document.getElementById(containerId);
-            const items = [...new Set(dataArray)].sort();
             container.innerHTML = '';
-            
-            items.forEach(item => {
+            [...new Set(items)].sort().forEach(item => {
                 const label = document.createElement('label');
-                label.className = 'flex items-center space-x-2 text-[11px] text-slate-600 cursor-pointer hover:bg-white p-1 rounded transition-colors';
-                label.innerHTML = `<input type="checkbox" value="${item}" class="filter-cb h-3 w-3 text-blue-600 rounded border-slate-300"> <span>${item}</span>`;
-                
+                label.className = 'flex items-center space-x-2 text-[10px] text-slate-600 cursor-pointer hover:bg-white p-1 rounded';
+                label.innerHTML = `<input type="checkbox" value="${item}" class="filter-cb h-3 w-3 text-blue-600 rounded"> <span>${item}</span>`;
                 label.querySelector('input').addEventListener('change', (e) => {
                     if(e.target.checked) setRef.add(e.target.value);
                     else setRef.delete(e.target.value);
                     updateView();
                 });
-                
                 container.appendChild(label);
             });
         }
 
         function populateFilters() {
-            createFilterGroup('cityFilters', allData.map(d => d.City), 'cities', activeFilters.cities);
-            createFilterGroup('ownerFilters', allData.map(d => d.Owner), 'owners', activeFilters.owners);
-            createFilterGroup('conceptFilters', allData.map(d => d.Concept), 'concepts', activeFilters.concepts);
-            createFilterGroup('descFilters', allData.map(d => d.Concept_Description), 'descriptions', activeFilters.descriptions);
+            createFilterGroup('kommunFilters', allData.map(d => d.Geo_Kommun), activeFilters.kommuner);
+            createFilterGroup('cityFilters', allData.map(d => d.City), activeFilters.cities);
+            createFilterGroup('ownerFilters', allData.map(d => d.Owner), activeFilters.owners);
+            createFilterGroup('conceptFilters', allData.map(d => d.Concept), activeFilters.concepts);
 
             document.getElementById('searchInput').addEventListener('input', (e) => {
                 activeFilters.search = e.target.value.toLowerCase();
@@ -280,7 +245,7 @@
             document.getElementById('resetFilters').addEventListener('click', () => {
                 document.querySelectorAll('.filter-cb').forEach(cb => cb.checked = false);
                 document.getElementById('searchInput').value = '';
-                Object.values(activeFilters).forEach(v => v instanceof Set ? v.clear() : activeFilters.search = '');
+                activeFilters.kommuner.clear(); activeFilters.cities.clear(); activeFilters.owners.clear(); activeFilters.concepts.clear();
                 updateView();
             });
 
@@ -288,54 +253,32 @@
         }
 
         function updateView() {
-            // 1. Filtrera data
             filteredData = allData.filter(d => {
-                const searchStr = (d.Display_Name + " " + d.Address + " " + d.City).toLowerCase();
-                const matchesSearch = !activeFilters.search || searchStr.includes(activeFilters.search);
-                const matchesCity = activeFilters.cities.size === 0 || activeFilters.cities.has(d.City);
-                const matchesOwner = activeFilters.owners.size === 0 || activeFilters.owners.has(d.Owner);
-                const matchesConcept = activeFilters.concepts.size === 0 || activeFilters.concepts.has(d.Concept);
-                const matchesDesc = activeFilters.descriptions.size === 0 || activeFilters.descriptions.has(d.Concept_Description);
-                
-                return matchesSearch && matchesCity && matchesOwner && matchesConcept && matchesDesc;
+                const searchStr = (d.Display_Name + " " + d.Address + " " + d.Geo_Kommun + " " + d.City).toLowerCase();
+                return (!activeFilters.search || searchStr.includes(activeFilters.search)) &&
+                       (activeFilters.kommuner.size === 0 || activeFilters.kommuner.has(d.Geo_Kommun)) &&
+                       (activeFilters.cities.size === 0 || activeFilters.cities.has(d.City)) &&
+                       (activeFilters.owners.size === 0 || activeFilters.owners.has(d.Owner)) &&
+                       (activeFilters.concepts.size === 0 || activeFilters.concepts.has(d.Concept));
             });
 
             renderMarkers();
             renderTable();
-            
             document.getElementById('stats').innerText = `${filteredData.length} aktiva butiker`;
-            document.getElementById('rowCountDisplay').innerText = `Visar ${filteredData.length} av ${allData.length} butiker`;
+            document.getElementById('rowCountDisplay').innerText = `${filteredData.length} av ${allData.length} butiker`;
         }
 
         function renderMarkers() {
             markersLayer.clearLayers();
             filteredData.forEach(d => {
-                if(!isNaN(d.Lat) && !isNaN(d.Long)) {
-                    const marker = L.circleMarker([d.Lat, d.Long], {
-                        radius: 6,
-                        fillColor: "#2563eb",
-                        color: "#fff",
-                        weight: 1.5,
-                        opacity: 1,
-                        fillOpacity: 0.8
-                    });
-
-                    marker.bindPopup(`
-                        <div class="p-1 font-sans">
-                            <div class="text-[9px] font-bold text-blue-600 uppercase mb-0.5">${d.Concept}</div>
-                            <h3 class="font-bold text-slate-800 text-xs mb-1">${d.Display_Name}</h3>
-                            <p class="text-[10px] text-slate-500 leading-tight">${d.Address}<br>${d.City}</p>
-                            <div class="mt-2 pt-1 border-t border-slate-100 text-[9px] text-slate-400">
-                                Ägare: ${d.Owner}
-                            </div>
-                        </div>
-                    `, { className: 'custom-popup' });
-                    
-                    markersLayer.addLayer(marker);
-                }
+                const marker = L.circleMarker([d.Lat, d.Long], {
+                    radius: 5, fillColor: "#2563eb", color: "#fff", weight: 1, fillOpacity: 0.8
+                });
+                marker.bindPopup(`<b class="text-xs">${d.Display_Name}</b><br><span class="text-[10px] text-slate-500">${d.Geo_Kommun} (${d.City})</span>`, { className: 'custom-popup' });
+                markersLayer.addLayer(marker);
             });
             
-            if(filteredData.length > 0 && activeFilters.cities.size > 0) {
+            if(filteredData.length > 0 && (activeFilters.kommuner.size > 0 || activeFilters.cities.size > 0)) {
                 const group = new L.featureGroup(markersLayer.getLayers());
                 map.fitBounds(group.getBounds(), { padding: [50, 50], maxZoom: 12 });
             }
@@ -344,57 +287,47 @@
         function renderTable() {
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
-            
             filteredData.forEach(d => {
                 const tr = document.createElement('tr');
-                tr.className = 'hover:bg-slate-50 transition-colors cursor-pointer';
+                tr.className = 'hover:bg-slate-50 cursor-pointer transition-colors';
                 tr.innerHTML = `
-                    <td class="px-4 py-2.5 font-medium text-slate-800">${d.Display_Name}</td>
-                    <td class="px-4 py-2.5 text-slate-600">${d.City}</td>
-                    <td class="px-4 py-2.5 text-slate-600">${d.Owner}</td>
-                    <td class="px-4 py-2.5"><span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-bold">${d.Concept}</span></td>
-                    <td class="px-4 py-2.5 text-slate-500">${d.Address}</td>
-                    <td class="px-4 py-2.5 text-slate-500">${d.Open_Date}</td>
+                    <td class="px-4 py-2 font-medium text-slate-800">${d.Display_Name}</td>
+                    <td class="px-4 py-2 text-blue-600 font-bold">${d.Geo_Kommun}</td>
+                    <td class="px-4 py-2 text-slate-600">${d.City}</td>
+                    <td class="px-4 py-2 text-slate-600">${d.Owner}</td>
+                    <td class="px-4 py-2"><span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">${d.Concept}</span></td>
+                    <td class="px-4 py-2 text-slate-500">${d.Address}</td>
+                    <td class="px-4 py-2 text-slate-400 text-right italic">${d.Open_Date}</td>
                 `;
-                tr.addEventListener('click', () => {
-                    map.setView([d.Lat, d.Long], 14);
-                    // Hitta markören för denna butik och öppna dess popup
-                    markersLayer.eachLayer(marker => {
-                        if(marker.getLatLng().lat === d.Lat && marker.getLatLng().lng === d.Long) {
-                            marker.openPopup();
-                        }
-                    });
-                });
+                tr.onclick = () => { map.setView([d.Lat, d.Long], 14); };
                 tbody.appendChild(tr);
             });
         }
 
         function exportToCsv() {
             if (filteredData.length === 0) return;
-            
-            // Vi hämtar alla kolumner från rådatan för exporten
             const headers = Object.keys(filteredData[0].Raw);
+            headers.unshift('GEO_BERAKNAD_KOMMUN');
+            
             const csvContent = [
                 headers.join(','),
-                ...filteredData.map(d => headers.map(header => `"${(d.Raw[header] || '').toString().replace(/"/g, '""')}"`).join(','))
+                ...filteredData.map(d => headers.map(h => {
+                    const val = (h === 'GEO_BERAKNAD_KOMMUN') ? d.Geo_Kommun : d.Raw[h];
+                    return `"${(val || '').toString().replace(/"/g, '""')}"`;
+                }).join(','))
             ].join('\n');
 
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
-            const url = URL.createObjectURL(blob);
-            link.setAttribute("href", url);
-            link.setAttribute("download", `butikslista_urval_${new Date().toISOString().split('T')[0]}.csv`);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
+            link.href = URL.createObjectURL(blob);
+            link.download = `butiksdata_urval_${new Date().toISOString().split('T')[0]}.csv`;
             link.click();
-            document.body.removeChild(link);
         }
 
-        window.addEventListener('load', () => {
+        window.onload = () => {
             initMap();
-            loadMunicipalities();
-            loadSheetData();
-        });
+            loadAssetsAndData();
+        };
     </script>
 </body>
 </html>
