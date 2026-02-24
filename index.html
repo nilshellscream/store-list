@@ -40,7 +40,7 @@
     <div id="loader" class="loading-overlay">
         <div class="text-center">
             <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mb-4"></div>
-            <p class="text-slate-600 font-medium italic">Laddar butiksdata...</p>
+            <p class="text-slate-600 font-medium italic text-lg">Hämtar butiksregister...</p>
         </div>
     </div>
 
@@ -54,11 +54,12 @@
             <h1 class="text-lg font-bold tracking-tight uppercase italic">Butikskarta <span class="text-blue-400 font-light not-italic">Pro</span></h1>
         </div>
         <div class="flex items-center space-x-4">
-            <div id="stats" class="hidden md:block text-sm font-medium bg-slate-800 px-4 py-1.5 rounded-full border border-slate-700 italic">
+            <div id="stats" class="hidden md:block text-sm font-medium bg-slate-800 px-4 py-1.5 rounded-full border border-slate-700 italic text-blue-300">
                 Laddar...
             </div>
-            <button id="downloadCsv" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-full text-xs font-bold transition-colors">
-                Exportera CSV
+            <button id="downloadCsv" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-full text-xs font-bold transition-colors flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                Export
             </button>
         </div>
     </nav>
@@ -69,20 +70,25 @@
             <div class="p-4 space-y-6">
                 
                 <section>
-                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Sök butik</label>
-                    <input type="text" id="searchInput" placeholder="Namn eller adress..." 
-                        class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block italic">Sök i registret</label>
+                    <div class="relative">
+                        <input type="text" id="searchInput" placeholder="Namn, stad eller gata..." 
+                            class="w-full border border-slate-200 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 absolute left-3 top-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
                 </section>
 
                 <div class="space-y-3">
                     <!-- Stad -->
                     <div class="filter-section active border border-slate-100 rounded-lg overflow-hidden" id="section-cities">
                         <header class="flex items-center justify-between p-3 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors">
-                            <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Stad</span>
+                            <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Städer</span>
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                         </header>
                         <content class="p-2 bg-white border-t border-slate-50">
-                            <div id="cityFilters" class="space-y-1 max-h-40 overflow-y-auto pr-1"></div>
+                            <div id="cityFilters" class="space-y-1 max-h-48 overflow-y-auto pr-1"></div>
                         </content>
                     </div>
 
@@ -93,7 +99,7 @@
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                         </header>
                         <content class="p-2 bg-white border-t border-slate-50">
-                            <div id="ownerFilters" class="space-y-1 max-h-40 overflow-y-auto pr-1"></div>
+                            <div id="ownerFilters" class="space-y-1 max-h-48 overflow-y-auto pr-1"></div>
                         </content>
                     </div>
 
@@ -104,13 +110,13 @@
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                         </header>
                         <content class="p-2 bg-white border-t border-slate-50">
-                            <div id="conceptFilters" class="space-y-1 max-h-40 overflow-y-auto pr-1"></div>
+                            <div id="conceptFilters" class="space-y-1 max-h-48 overflow-y-auto pr-1"></div>
                         </content>
                     </div>
                 </div>
 
-                <button id="resetFilters" class="w-full text-[11px] font-bold text-slate-400 hover:text-red-500 uppercase tracking-widest py-2 transition-colors">
-                    Återställ alla filter
+                <button id="resetFilters" class="w-full text-[10px] font-black text-slate-400 hover:text-red-500 uppercase tracking-widest py-3 border-2 border-dashed border-slate-100 rounded-xl transition-all hover:border-red-100">
+                    Nollställ alla filter
                 </button>
             </div>
         </aside>
@@ -121,21 +127,21 @@
             
             <div class="flex-1 bg-white border-t border-slate-200 flex flex-col min-h-0 shadow-inner">
                 <div class="px-6 py-2 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                    <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Urval</h2>
-                    <span id="rowCount" class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">0 rader</span>
+                    <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Resultatlista</h2>
+                    <span id="rowCount" class="text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">0 butiker</span>
                 </div>
                 <div class="table-container">
                     <table class="w-full text-left border-collapse text-[12px]">
-                        <thead class="sticky top-0 bg-white shadow-sm z-10 border-b border-slate-100">
-                            <tr class="text-slate-400 uppercase text-[10px] font-bold">
-                                <th class="px-6 py-3">Butiksnamn</th>
-                                <th class="px-6 py-3">Stad</th>
-                                <th class="px-6 py-3">Ägare</th>
-                                <th class="px-6 py-3">Koncept</th>
-                                <th class="px-6 py-3">Adress</th>
+                        <thead class="sticky top-0 bg-white shadow-sm z-10 border-b border-slate-200">
+                            <tr class="text-slate-500 uppercase text-[9px] font-black tracking-wider">
+                                <th class="px-6 py-4">Butiksnamn</th>
+                                <th class="px-6 py-4">Stad</th>
+                                <th class="px-6 py-4">Ägare</th>
+                                <th class="px-6 py-4">Koncept</th>
+                                <th class="px-6 py-4">Gatuadress</th>
                             </tr>
                         </thead>
-                        <tbody id="tableBody" class="divide-y divide-slate-50"></tbody>
+                        <tbody id="tableBody" class="divide-y divide-slate-100"></tbody>
                     </table>
                 </div>
             </div>
@@ -156,10 +162,15 @@
         };
 
         function initMap() {
-            map = L.map('map', { zoomControl: false }).setView([62.0, 15.0], 5);
+            map = L.map('map', { 
+                zoomControl: false,
+                preferCanvas: true 
+            }).setView([62.0, 15.0], 5);
+            
             L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                attribution: '© OpenStreetMap contributors'
+                attribution: '© OpenStreetMap'
             }).addTo(map);
+            
             L.control.zoom({ position: 'bottomright' }).addTo(map);
             markersLayer = L.layerGroup().addTo(map);
         }
@@ -170,74 +181,82 @@
                 header: true,
                 skipEmptyLines: true,
                 complete: function(results) {
+                    console.log("Rådata laddad, rader:", results.data.length);
+                    
                     allData = results.data.filter(row => {
-                        const hasLat = row['Latitude'] && row['Latitude'].trim() !== '';
-                        const closeDate = (row['Close Date'] || '').toLowerCase().trim();
-                        // Filtrera bort stängda butiker och de utan koordinater
-                        return hasLat && (closeDate === '' || closeDate === 'n/a');
+                        // Kontrollera att Lat/Lng finns och är giltiga nummer
+                        const latRaw = (row['Latitude'] || '').replace(',', '.').trim();
+                        const lngRaw = (row['Longitude'] || '').replace(',', '.').trim();
+                        const lat = parseFloat(latRaw);
+                        const lng = parseFloat(lngRaw);
+                        
+                        const hasCoords = !isNaN(lat) && !isNaN(lng);
+                        const isNotClosed = (row['Close Date'] || '').toLowerCase().trim() === '' || (row['Close Date'] || '').toLowerCase().trim() === 'n/a';
+                        
+                        return hasCoords && isNotClosed;
                     }).map(row => ({
-                        name: row['Display Name'] || row['Store ID'] || 'Namnlös',
-                        city: row['City'] || 'N/A',
-                        owner: row['Owner'] || 'N/A',
-                        concept: row['Concept'] || 'Övrigt',
+                        name: row['Display Name'] || row['Store ID'] || 'Okänd butik',
+                        city: row['City'] || 'Saknas',
+                        owner: row['Owner'] || 'Övriga',
+                        concept: row['Concept'] || 'N/A',
                         address: row['Address'] || '',
                         lat: parseFloat(row['Latitude'].replace(',', '.')),
                         lng: parseFloat(row['Longitude'].replace(',', '.')),
                         raw: row
                     }));
 
+                    console.log("Validerad data, rader:", allData.length);
                     setupFilters();
                     updateUI();
                     document.getElementById('loader').classList.add('hidden');
                 },
-                error: function() {
-                    alert("Kunde inte hämta data från Google Sheets.");
+                error: function(err) {
+                    console.error("Fel vid laddning av CSV:", err);
+                    alert("Kunde inte hämta data från Google Sheets. Kontrollera nätverket.");
                 }
             });
         }
 
         function setupFilters() {
-            // Skapa checkboxar för filter
             createCheckboxFilter('cityFilters', allData.map(d => d.city), activeFilters.cities);
             createCheckboxFilter('ownerFilters', allData.map(d => d.owner), activeFilters.owners);
             createCheckboxFilter('conceptFilters', allData.map(d => d.concept), activeFilters.concepts);
 
-            // Sök-input
             document.getElementById('searchInput').addEventListener('input', (e) => {
                 activeFilters.search = e.target.value.toLowerCase();
                 updateUI();
             });
 
-            // Accordion-logik
             document.querySelectorAll('.filter-section header').forEach(header => {
                 header.onclick = () => header.parentElement.classList.toggle('active');
             });
 
-            // Reset
             document.getElementById('resetFilters').onclick = () => {
                 document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-                activeFilters.cities.clear(); activeFilters.owners.clear(); activeFilters.concepts.clear();
+                activeFilters.cities.clear(); 
+                activeFilters.owners.clear(); 
+                activeFilters.concepts.clear();
                 document.getElementById('searchInput').value = '';
                 activeFilters.search = '';
                 updateUI();
+                map.setView([62.0, 15.0], 5);
             };
 
-            // Export
             document.getElementById('downloadCsv').onclick = exportCsv;
         }
 
         function createCheckboxFilter(containerId, items, filterSet) {
             const container = document.getElementById(containerId);
-            const uniqueItems = [...new Set(items)].sort();
+            const uniqueItems = [...new Set(items.filter(i => i && i !== 'Saknas'))].sort();
             
             uniqueItems.forEach(item => {
                 const div = document.createElement('div');
-                div.className = 'flex items-center space-x-2 p-1 hover:bg-slate-50 rounded cursor-pointer';
+                div.className = 'flex items-center space-x-2 p-1.5 hover:bg-blue-50 rounded-md cursor-pointer transition-colors group';
                 div.innerHTML = `
-                    <input type="checkbox" id="${item}" class="h-3 w-3 rounded text-blue-600 border-slate-300">
-                    <label for="${item}" class="text-[11px] text-slate-600 truncate cursor-pointer flex-1">${item}</label>
+                    <input type="checkbox" id="${containerId}-${item}" class="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
+                    <label for="${containerId}-${item}" class="text-[11px] font-medium text-slate-600 truncate cursor-pointer flex-1 group-hover:text-blue-700">${item}</label>
                 `;
-                div.querySelector('input').onclick = (e) => {
+                div.querySelector('input').onchange = (e) => {
                     if (e.target.checked) filterSet.add(item);
                     else filterSet.delete(item);
                     updateUI();
@@ -249,7 +268,7 @@
         function updateUI() {
             filteredData = allData.filter(d => {
                 const matchesSearch = !activeFilters.search || 
-                    (d.name + d.address + d.city).toLowerCase().includes(activeFilters.search);
+                    (d.name + d.address + d.city + d.owner).toLowerCase().includes(activeFilters.search);
                 const matchesCity = activeFilters.cities.size === 0 || activeFilters.cities.has(d.city);
                 const matchesOwner = activeFilters.owners.size === 0 || activeFilters.owners.has(d.owner);
                 const matchesConcept = activeFilters.concepts.size === 0 || activeFilters.concepts.has(d.concept);
@@ -259,54 +278,107 @@
 
             renderMarkers();
             renderTable();
-            document.getElementById('stats').innerText = `${filteredData.length} butiker hittade`;
-            document.getElementById('rowCount').innerText = `${filteredData.length} rader`;
+            
+            const countText = `${filteredData.length} butiker`;
+            document.getElementById('stats').innerText = countText;
+            document.getElementById('rowCount').innerText = countText;
         }
 
         function renderMarkers() {
             markersLayer.clearLayers();
+            
             filteredData.forEach(d => {
+                // Sista säkerhetskoll innan vi ritar
+                if (isNaN(d.lat) || isNaN(d.lng)) return;
+
                 const marker = L.circleMarker([d.lat, d.lng], {
-                    radius: 5, fillColor: "#2563eb", color: "#fff", weight: 1, fillOpacity: 0.8
+                    radius: 5, 
+                    fillColor: "#2563eb", 
+                    color: "#fff", 
+                    weight: 1.5, 
+                    fillOpacity: 0.8
                 });
-                marker.bindPopup(`<div class="p-1"><b class="text-sm">${d.name}</b><br><span class="text-xs text-slate-500">${d.address}</span></div>`);
+                
+                const popupContent = `
+                    <div class="p-2 min-w-[150px]">
+                        <p class="text-[9px] font-black text-blue-600 uppercase tracking-tighter mb-0.5">${d.owner}</p>
+                        <h3 class="font-bold text-slate-800 text-sm leading-tight mb-1">${d.name}</h3>
+                        <p class="text-xs text-slate-500 mb-2">${d.address}, ${d.city}</p>
+                        <div class="flex items-center gap-1">
+                            <span class="bg-slate-100 text-[10px] px-1.5 py-0.5 rounded font-bold text-slate-600">${d.concept}</span>
+                        </div>
+                    </div>
+                `;
+                
+                marker.bindPopup(popupContent, { closeButton: false });
                 markersLayer.addLayer(marker);
             });
 
-            if (filteredData.length > 0 && (activeFilters.cities.size > 0 || activeFilters.search !== '')) {
-                const group = new L.featureGroup(markersLayer.getLayers());
-                map.fitBounds(group.getBounds(), { padding: [40, 40], maxZoom: 12 });
+            // Auto-zoom om vi har filtrerat fram något specifikt
+            if (filteredData.length > 0 && filteredData.length < allData.length) {
+                try {
+                    const group = new L.featureGroup(markersLayer.getLayers());
+                    if (group.getLayers().length > 0) {
+                        map.fitBounds(group.getBounds(), { padding: [50, 50], maxZoom: 13 });
+                    }
+                } catch(e) { console.error("Kunde inte zooma till markers", e); }
             }
         }
 
         function renderTable() {
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
-            filteredData.forEach(d => {
+            
+            // Visa bara de första 100 i tabellen för prestanda om listan är enorm
+            const displayLimit = 200;
+            const toDisplay = filteredData.slice(0, displayLimit);
+
+            toDisplay.forEach(d => {
                 const tr = document.createElement('tr');
-                tr.className = 'hover:bg-blue-50/50 cursor-pointer transition-colors';
+                tr.className = 'hover:bg-blue-50/50 cursor-pointer transition-colors group';
                 tr.innerHTML = `
-                    <td class="px-6 py-3 font-bold text-slate-800">${d.name}</td>
-                    <td class="px-6 py-3 text-slate-600">${d.city}</td>
-                    <td class="px-6 py-3 text-slate-600">${d.owner}</td>
-                    <td class="px-6 py-3"><span class="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-bold text-slate-500">${d.concept}</span></td>
-                    <td class="px-6 py-3 text-slate-500">${d.address}</td>
+                    <td class="px-6 py-4">
+                        <div class="font-bold text-slate-900 group-hover:text-blue-700">${d.name}</div>
+                        <div class="text-[10px] text-slate-400 font-medium">ID: ${d.raw['Store ID'] || '-'}</div>
+                    </td>
+                    <td class="px-6 py-4 text-slate-600 font-medium">${d.city}</td>
+                    <td class="px-6 py-4 text-slate-600 italic">${d.owner}</td>
+                    <td class="px-6 py-4">
+                        <span class="bg-slate-100 px-2 py-1 rounded-md text-[10px] font-bold text-slate-500 border border-slate-200">${d.concept}</span>
+                    </td>
+                    <td class="px-6 py-4 text-slate-500">${d.address}</td>
                 `;
                 tr.onclick = () => {
-                    map.setView([d.lat, d.lng], 14);
+                    if (!isNaN(d.lat) && !isNaN(d.lng)) {
+                        map.setView([d.lat, d.lng], 15);
+                        // Hitta rätt marker och öppna dess popup
+                        markersLayer.eachLayer(m => {
+                            if (m.getLatLng().lat === d.lat && m.getLatLng().lng === d.lng) {
+                                m.openPopup();
+                            }
+                        });
+                    }
                 };
                 tbody.appendChild(tr);
             });
+
+            if (filteredData.length > displayLimit) {
+                const infoRow = document.createElement('tr');
+                infoRow.innerHTML = `<td colspan="5" class="px-6 py-4 text-center text-slate-400 italic text-[11px]">Visar de första ${displayLimit} butikerna. Använd sök för att hitta specifika objekt.</td>`;
+                tbody.appendChild(infoRow);
+            }
         }
 
         function exportCsv() {
+            if (filteredData.length === 0) return;
             const csv = Papa.unparse(filteredData.map(d => d.raw));
             const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `butiksexport_${new Date().toISOString().split('T')[0]}.csv`;
+            a.download = `butiksanalys_${new Date().toISOString().split('T')[0]}.csv`;
             a.click();
+            URL.revokeObjectURL(url);
         }
 
         window.onload = () => {
