@@ -12,8 +12,14 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- PapaParse för CSV -->
+    <!-- PapaParse för CSV inläsning -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <!-- SheetJS för riktig Excel-export (.xlsx) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- Turf.js för geografiska beräkningar (hitta kommun utifrån koordinat) -->
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
     <style>
         #map { height: 45vh; width: 100%; z-index: 1; }
@@ -37,11 +43,12 @@
 </head>
 <body class="bg-slate-50 font-sans text-slate-900 antialiased overflow-hidden">
 
-    <div id="loader" class="loading-overlay">
-        <div class="text-center">
-            <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mb-4"></div>
-            <p class="text-slate-600 font-medium italic text-lg">Hämtar butiksregister...</p>
-        </div>
+    <div id="loader" class="loading-overlay flex-col gap-4">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+        <p class="text-slate-600 font-medium italic text-lg text-center">
+            Hämtar butiksregister...<br/>
+            <span class="text-sm text-slate-400">Analyserar geografisk data för kommuner</span>
+        </p>
     </div>
 
     <nav class="bg-slate-900 text-white h-16 px-6 flex items-center justify-between shadow-lg relative z-[1001]">
@@ -57,9 +64,11 @@
             <div id="stats" class="hidden md:block text-sm font-medium bg-slate-800 px-4 py-1.5 rounded-full border border-slate-700 italic text-blue-300">
                 Laddar...
             </div>
-            <button id="downloadCsv" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-full text-xs font-bold transition-colors flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
-                Export
+            <button id="downloadExcel" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-full text-xs font-bold transition-colors flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Exportera Excel
             </button>
         </div>
     </nav>
@@ -72,7 +81,7 @@
                 <section>
                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block italic">Sök i registret</label>
                     <div class="relative">
-                        <input type="text" id="searchInput" placeholder="Namn, stad eller gata..." 
+                        <input type="text" id="searchInput" placeholder="Namn, kommun eller gata..." 
                             class="w-full border border-slate-200 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 transition-all">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 absolute left-3 top-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -81,8 +90,19 @@
                 </section>
 
                 <div class="space-y-3">
+                    <!-- Kommun (Nytt filter) -->
+                    <div class="filter-section active border border-slate-100 rounded-lg overflow-hidden" id="section-municipalities">
+                        <header class="flex items-center justify-between p-3 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors">
+                            <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Kommuner</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                        </header>
+                        <content class="p-2 bg-white border-t border-slate-50">
+                            <div id="municipalityFilters" class="space-y-1 max-h-48 overflow-y-auto pr-1"></div>
+                        </content>
+                    </div>
+
                     <!-- Stad -->
-                    <div class="filter-section active border border-slate-100 rounded-lg overflow-hidden" id="section-cities">
+                    <div class="filter-section border border-slate-100 rounded-lg overflow-hidden" id="section-cities">
                         <header class="flex items-center justify-between p-3 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors">
                             <span class="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Städer</span>
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
@@ -135,6 +155,7 @@
                         <thead class="sticky top-0 bg-white shadow-sm z-10 border-b border-slate-200">
                             <tr class="text-slate-500 uppercase text-[9px] font-black tracking-wider">
                                 <th class="px-6 py-4">Butiksnamn</th>
+                                <th class="px-6 py-4">Kommun</th>
                                 <th class="px-6 py-4">Stad</th>
                                 <th class="px-6 py-4">Ägare</th>
                                 <th class="px-6 py-4">Koncept</th>
@@ -150,12 +171,15 @@
 
     <script>
         const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQLzuX1BgTlHxwgd7QnVuA2aPLR8EKXMg89E2OWfHHIQ5OBgZTylykPUZ-LvGGxjkj1x_xCZcy3jLG3/pub?gid=0&single=true&output=csv';
+        // En pålitlig källa för svenska kommungränser (används om datan inte redan har "Kommun")
+        const GEOJSON_URL = 'https://raw.githubusercontent.com/Hasselberg/sweden-geojson/master/kommuner.geojson';
         
         let map, markersLayer;
         let allData = [];
         let filteredData = [];
         let activeFilters = {
             search: '',
+            municipalities: new Set(),
             cities: new Set(),
             owners: new Set(),
             concepts: new Set()
@@ -167,8 +191,8 @@
                 preferCanvas: true 
             }).setView([62.0, 15.0], 5);
             
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                attribution: '© OpenStreetMap'
+            L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; Stadia Maps &copy; OpenMapTiles'
             }).addTo(map);
             
             L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -176,48 +200,82 @@
         }
 
         function loadData() {
-            Papa.parse(CSV_URL, {
-                download: true,
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    console.log("Rådata laddad, rader:", results.data.length);
+            // Ladda både CSV och GeoJSON (kommun-karta) parallellt för snabbhet
+            const fetchCSV = new Promise((resolve, reject) => {
+                Papa.parse(CSV_URL, {
+                    download: true,
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results) => resolve(results.data),
+                    error: (err) => reject(err)
+                });
+            });
+
+            const fetchGeoJSON = fetch(GEOJSON_URL)
+                .then(res => res.json())
+                .catch(err => {
+                    console.warn("Kunde inte ladda kommungränser. Appen fungerar ändå, men kan sakna kommunnamn.", err);
+                    return null;
+                });
+
+            Promise.all([fetchCSV, fetchGeoJSON])
+                .then(([csvData, geoJson]) => {
                     
-                    allData = results.data.filter(row => {
-                        // Kontrollera att Lat/Lng finns och är giltiga nummer
+                    allData = csvData.filter(row => {
                         const latRaw = (row['Latitude'] || '').replace(',', '.').trim();
                         const lngRaw = (row['Longitude'] || '').replace(',', '.').trim();
                         const lat = parseFloat(latRaw);
                         const lng = parseFloat(lngRaw);
                         
+                        // Filtrera bort trasiga koordinater (vilket förhindrar Turf.js krascher!)
                         const hasCoords = !isNaN(lat) && !isNaN(lng);
                         const isNotClosed = (row['Close Date'] || '').toLowerCase().trim() === '' || (row['Close Date'] || '').toLowerCase().trim() === 'n/a';
                         
                         return hasCoords && isNotClosed;
-                    }).map(row => ({
-                        name: row['Display Name'] || row['Store ID'] || 'Okänd butik',
-                        city: row['City'] || 'Saknas',
-                        owner: row['Owner'] || 'Övriga',
-                        concept: row['Concept'] || 'N/A',
-                        address: row['Address'] || '',
-                        lat: parseFloat(row['Latitude'].replace(',', '.')),
-                        lng: parseFloat(row['Longitude'].replace(',', '.')),
-                        raw: row
-                    }));
+                    }).map(row => {
+                        const lat = parseFloat(row['Latitude'].replace(',', '.'));
+                        const lng = parseFloat(row['Longitude'].replace(',', '.'));
+                        
+                        // Om kolumnen redan finns i CSV används den först
+                        let mun = row['Kommun'] || row['Municipality'] || '';
+                        
+                        // Om kommun saknas - Räkna ut den via Turf.js!
+                        if (!mun && geoJson) {
+                            try {
+                                const pt = turf.point([lng, lat]);
+                                const match = geoJson.features.find(f => turf.booleanPointInPolygon(pt, f));
+                                if (match && match.properties) {
+                                    mun = match.properties.name || match.properties.kommunnamn || match.properties.KOMMUNNAMN || match.properties.namn || '';
+                                }
+                            } catch(e) { /* Tyst felsökning om en enskild punkt bråkar */ }
+                        }
 
-                    console.log("Validerad data, rader:", allData.length);
+                        return {
+                            name: row['Display Name'] || row['Store ID'] || 'Okänd butik',
+                            city: row['City'] || 'Saknas',
+                            municipality: mun || 'Saknas',
+                            owner: row['Owner'] || 'Övriga',
+                            concept: row['Concept'] || 'N/A',
+                            address: row['Address'] || '',
+                            lat: lat,
+                            lng: lng,
+                            raw: row
+                        };
+                    });
+
                     setupFilters();
                     updateUI();
                     document.getElementById('loader').classList.add('hidden');
-                },
-                error: function(err) {
-                    console.error("Fel vid laddning av CSV:", err);
-                    alert("Kunde inte hämta data från Google Sheets. Kontrollera nätverket.");
-                }
-            });
+                })
+                .catch(err => {
+                    console.error("Kritiskt fel vid inläsning:", err);
+                    alert("Kunde inte ladda data. Kontrollera nätverksanslutningen.");
+                    document.getElementById('loader').classList.add('hidden');
+                });
         }
 
         function setupFilters() {
+            createCheckboxFilter('municipalityFilters', allData.map(d => d.municipality), activeFilters.municipalities);
             createCheckboxFilter('cityFilters', allData.map(d => d.city), activeFilters.cities);
             createCheckboxFilter('ownerFilters', allData.map(d => d.owner), activeFilters.owners);
             createCheckboxFilter('conceptFilters', allData.map(d => d.concept), activeFilters.concepts);
@@ -233,6 +291,7 @@
 
             document.getElementById('resetFilters').onclick = () => {
                 document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                activeFilters.municipalities.clear();
                 activeFilters.cities.clear(); 
                 activeFilters.owners.clear(); 
                 activeFilters.concepts.clear();
@@ -242,11 +301,12 @@
                 map.setView([62.0, 15.0], 5);
             };
 
-            document.getElementById('downloadCsv').onclick = exportCsv;
+            document.getElementById('downloadExcel').onclick = exportExcel;
         }
 
         function createCheckboxFilter(containerId, items, filterSet) {
             const container = document.getElementById(containerId);
+            container.innerHTML = ''; // Rensa innan skapande
             const uniqueItems = [...new Set(items.filter(i => i && i !== 'Saknas'))].sort();
             
             uniqueItems.forEach(item => {
@@ -268,12 +328,13 @@
         function updateUI() {
             filteredData = allData.filter(d => {
                 const matchesSearch = !activeFilters.search || 
-                    (d.name + d.address + d.city + d.owner).toLowerCase().includes(activeFilters.search);
+                    (d.name + d.address + d.city + d.municipality + d.owner).toLowerCase().includes(activeFilters.search);
+                const matchesMunicipality = activeFilters.municipalities.size === 0 || activeFilters.municipalities.has(d.municipality);
                 const matchesCity = activeFilters.cities.size === 0 || activeFilters.cities.has(d.city);
                 const matchesOwner = activeFilters.owners.size === 0 || activeFilters.owners.has(d.owner);
                 const matchesConcept = activeFilters.concepts.size === 0 || activeFilters.concepts.has(d.concept);
                 
-                return matchesSearch && matchesCity && matchesOwner && matchesConcept;
+                return matchesSearch && matchesMunicipality && matchesCity && matchesOwner && matchesConcept;
             });
 
             renderMarkers();
@@ -288,7 +349,6 @@
             markersLayer.clearLayers();
             
             filteredData.forEach(d => {
-                // Sista säkerhetskoll innan vi ritar
                 if (isNaN(d.lat) || isNaN(d.lng)) return;
 
                 const marker = L.circleMarker([d.lat, d.lng], {
@@ -303,7 +363,7 @@
                     <div class="p-2 min-w-[150px]">
                         <p class="text-[9px] font-black text-blue-600 uppercase tracking-tighter mb-0.5">${d.owner}</p>
                         <h3 class="font-bold text-slate-800 text-sm leading-tight mb-1">${d.name}</h3>
-                        <p class="text-xs text-slate-500 mb-2">${d.address}, ${d.city}</p>
+                        <p class="text-xs text-slate-500 mb-2">${d.address}<br/>${d.city} <span class="text-slate-400">(${d.municipality}s kommun)</span></p>
                         <div class="flex items-center gap-1">
                             <span class="bg-slate-100 text-[10px] px-1.5 py-0.5 rounded font-bold text-slate-600">${d.concept}</span>
                         </div>
@@ -314,14 +374,13 @@
                 markersLayer.addLayer(marker);
             });
 
-            // Auto-zoom om vi har filtrerat fram något specifikt
             if (filteredData.length > 0 && filteredData.length < allData.length) {
                 try {
                     const group = new L.featureGroup(markersLayer.getLayers());
                     if (group.getLayers().length > 0) {
                         map.fitBounds(group.getBounds(), { padding: [50, 50], maxZoom: 13 });
                     }
-                } catch(e) { console.error("Kunde inte zooma till markers", e); }
+                } catch(e) { console.error(e); }
             }
         }
 
@@ -329,7 +388,6 @@
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
             
-            // Visa bara de första 100 i tabellen för prestanda om listan är enorm
             const displayLimit = 200;
             const toDisplay = filteredData.slice(0, displayLimit);
 
@@ -341,7 +399,8 @@
                         <div class="font-bold text-slate-900 group-hover:text-blue-700">${d.name}</div>
                         <div class="text-[10px] text-slate-400 font-medium">ID: ${d.raw['Store ID'] || '-'}</div>
                     </td>
-                    <td class="px-6 py-4 text-slate-600 font-medium">${d.city}</td>
+                    <td class="px-6 py-4 text-slate-600 font-medium">${d.municipality}</td>
+                    <td class="px-6 py-4 text-slate-600">${d.city}</td>
                     <td class="px-6 py-4 text-slate-600 italic">${d.owner}</td>
                     <td class="px-6 py-4">
                         <span class="bg-slate-100 px-2 py-1 rounded-md text-[10px] font-bold text-slate-500 border border-slate-200">${d.concept}</span>
@@ -351,7 +410,6 @@
                 tr.onclick = () => {
                     if (!isNaN(d.lat) && !isNaN(d.lng)) {
                         map.setView([d.lat, d.lng], 15);
-                        // Hitta rätt marker och öppna dess popup
                         markersLayer.eachLayer(m => {
                             if (m.getLatLng().lat === d.lat && m.getLatLng().lng === d.lng) {
                                 m.openPopup();
@@ -364,21 +422,32 @@
 
             if (filteredData.length > displayLimit) {
                 const infoRow = document.createElement('tr');
-                infoRow.innerHTML = `<td colspan="5" class="px-6 py-4 text-center text-slate-400 italic text-[11px]">Visar de första ${displayLimit} butikerna. Använd sök för att hitta specifika objekt.</td>`;
+                infoRow.innerHTML = `<td colspan="6" class="px-6 py-4 text-center text-slate-400 italic text-[11px]">Visar de första ${displayLimit} butikerna. Använd sök eller filter för att hitta specifika objekt.</td>`;
                 tbody.appendChild(infoRow);
             }
         }
 
-        function exportCsv() {
+        // Riktig Excel export (.xlsx) med SheetJS
+        function exportExcel() {
             if (filteredData.length === 0) return;
-            const csv = Papa.unparse(filteredData.map(d => d.raw));
-            const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `butiksanalys_${new Date().toISOString().split('T')[0]}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
+            
+            // Forma om datan. Om vi räknade ut kommunen själva lägger vi till den i Excel-datan
+            const exportData = filteredData.map(d => {
+                let row = { ...d.raw }; // Ta all originaldata från Google Sheets
+                if (!row['Kommun'] && !row['Municipality']) {
+                    row['Kommun'] = d.municipality; // Skjut in den beräknade kommunen som en ny kolumn
+                }
+                return row;
+            });
+
+            // Konvertera till Excel-format
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Filtrerade Butiker");
+            
+            // Ladda ner som riktig .xlsx-fil
+            const dateStr = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(workbook, `butiksanalys_${dateStr}.xlsx`);
         }
 
         window.onload = () => {
