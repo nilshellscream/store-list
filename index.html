@@ -15,6 +15,9 @@
     <!-- PapaParse för CSV -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
+    <!-- SheetJS för Excel-export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
     <style>
         :root {
             --coop-green: #0a893d;
@@ -408,14 +411,10 @@
 
         function exportCsv() {
             if (filteredData.length === 0) return;
-            const csv = Papa.unparse(filteredData.map(d => d.raw));
-            const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `butiksanalys_${new Date().toISOString().split('T')[0]}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
+            const ws = XLSX.utils.json_to_sheet(filteredData.map(d => d.raw));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Filtrerade Butiker');
+            XLSX.writeFile(wb, 'Filtrerade Butiker.xlsx');
         }
 
         window.onload = () => {
