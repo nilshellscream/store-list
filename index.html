@@ -233,8 +233,8 @@
                         
                         return hasCoords && isNotClosed;
                     }).map(row => ({
-                        name: row['Display Name'] || row['Store ID'] || 'Okänd butik',
-                        storeId: row['Store ID'] || '-',
+                        name: row['Display Name'] || row['Ledger ID'] || 'Okänd butik',
+                        storeId: row['Ledger ID'] || '-',
                         city: row['City'] || 'Saknas',
                         owner: row['Owner'] || 'Övriga',
                         concept: row['Concept'] || 'N/A',
